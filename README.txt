@@ -27,7 +27,7 @@ https://github.com/bharlow/fm-webdirect-custom
 Configuration (assets/js/oauth-config.js)
 ------------------------------------------
 This demo is static HTML and JavaScript; the browser cannot read a .env file. Copy
-assets/js/oauth-config.example.js to assets/js/oauth-config.js and edit the values:
+assets/js/oauth-config.js.example to assets/js/oauth-config.js and edit the values:
 
   dbName              Published WebDirect file name to open after OAuth (no .fmp12).
   fmsDNS              FileMaker Server box. Target of all API calls and the login POST.

@@ -1,7 +1,7 @@
 /**
  * Feature flags + deployment settings for the OAuth demo.
  * Remote scenario: the web server (webDNS) and FileMaker Server (fmsDNS) are different boxes.
- * Copy oauth-config.example.js to this file and edit for your deployment.
+ * Copy oauth-config.js.example to this file and edit for your deployment.
  */
 var OAUTH_CONFIG = {
 	/** Published WebDirect file name to open after OAuth (no .fmp12 extension). */
@@ -15,7 +15,7 @@ var OAUTH_CONFIG = {
 	/** Start OAuth as soon as provider info loads (button remains for manual retry). */
 	autoStartOAuth: false,
 	/** Use a full-page redirect to the IdP instead of a popup (see README.txt). */
-	useFullPageRedirect: false,
+	useFullPageRedirect: true,
 	/** loglevel verbosity: trace | debug | info | warn | error | silent. */
 	logLevel: 'debug'
 };
