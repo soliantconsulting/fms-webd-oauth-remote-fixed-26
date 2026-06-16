@@ -14,7 +14,7 @@ var OAUTH_CONFIG = {
 	identityProvider: 'Microsoft',
 	/** Start OAuth as soon as provider info loads (button remains for manual retry). */
 	autoStartOAuth: false,
-	/** Use a full-page redirect to the IdP instead of a popup (see README.txt). */
+	/** Use a full-page redirect to the IdP instead of a popup (see README.md). */
 	useFullPageRedirect: true,
 	/** loglevel verbosity: trace | debug | info | warn | error | silent. */
 	logLevel: 'debug'

@@ -2,7 +2,7 @@
  * The three Claris WebDirect OAuth API primitives, adapted for the remote scenario:
  * every FMS-directed URL is absolute (https://<fmsDNS>...), and the OAuth return URL
  * points at this web server (webDNS) so the Claris X-FMS-Return-URL cross-origin fix
- * brings the user/popup back to our pages. See README.txt and oauth-flow.js.
+ * brings the user/popup back to our pages. See README.md and oauth-flow.js.
  */
 
 function getProviderInfo(fmsDNS, callback) {
