@@ -109,6 +109,34 @@ Full-page mode flow
     | doOAuthLogin --------------------> POST /fmi/webd/<dbName>  (user=requestId, pwd=identifier)
     | strip query string from URL          -> WebDirect session opens (homeurl on webDNS)
 
+Local testing with Podman
+--------------------------
+A throwaway container (Ubuntu + nginx) serves these files over HTTPS on the webDNS
+hostname so the OAuth flow can be tested end to end. It serves files only; it changes
+nothing on FileMaker Server.
+
+Build and run:
+    ./container/run.sh
+This builds the image and runs nginx with the repo mounted read-only, published on port
+443, with WEBDNS defaulting to webdlogin.ets.fm. Override the hostname with:
+    WEBDNS=my-web-host.example.com ./container/run.sh
+
+Make the hostname resolve to your machine. Add to /etc/hosts (or use real DNS):
+    127.0.0.1 webdlogin.ets.fm
+Keep webDNS in assets/js/oauth-config.js matching this hostname. Then open:
+    https://webdlogin.ets.fm
+Edits to the repo files show on a browser refresh (the files are mounted, not baked in).
+
+About the SSL certificate:
+    The container generates a self-signed certificate at startup for whatever WEBDNS you
+    pass, so the certificate always matches the hostname. Your browser will show a one-time
+    "not trusted" warning; accepting it is safe here. Only the browser ever sees this
+    certificate: the identity provider redirects to FileMaker Server (fmsDNS), and FileMaker
+    Server sends the browser a redirect (302) to the return URL on webDNS — neither the IdP
+    nor FileMaker Server validates the webDNS certificate. To avoid the warning entirely,
+    mount your own certificate into the container at /etc/nginx/certs (server.crt and
+    server.key) and it will be used instead of generating one.
+
 Enjoy!
 
 Wim Decorte
