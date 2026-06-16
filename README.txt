@@ -134,8 +134,11 @@ About the SSL certificate:
     certificate: the identity provider redirects to FileMaker Server (fmsDNS), and FileMaker
     Server sends the browser a redirect (302) to the return URL on webDNS — neither the IdP
     nor FileMaker Server validates the webDNS certificate. To avoid the warning entirely,
-    mount your own certificate into the container at /etc/nginx/certs (server.crt and
-    server.key) and it will be used instead of generating one.
+    use your own certificate: put server.crt and server.key in a directory and point
+    CERT_DIR at it, e.g.
+        CERT_DIR=/path/to/certs ./container/run.sh
+    run.sh mounts that directory at /etc/nginx/certs and the container uses it instead of
+    generating one.
 
 Enjoy!
 
