@@ -127,7 +127,9 @@ function listenForOAuthPopupResponse(trackingId, requestId, onComplete) {
 		if (event.key && event.key !== OAUTH_STORAGE_KEY) {
 			return;
 		}
-		tryCompleteOAuthResponse(event.newValue, trackingId, requestId, onComplete);
+		if (tryCompleteOAuthResponse(event.newValue, trackingId, requestId, onComplete)) {
+			window.removeEventListener('storage', processOAuthResponse);
+		}
 	}
 
 	window.addEventListener('storage', processOAuthResponse);
