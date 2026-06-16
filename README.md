@@ -14,15 +14,16 @@ the popup flow below work when the files are hosted off-server.
 
 ## Which repo do I use?
 
-- **This repo:** web site on a separate server, modern FileMaker Server (`X-FMS-Return-URL`
-  fix).
-- **Web site hosted ON FileMaker Server:** https://github.com/wimdecorte/fms-webd-oauth-local
-- **Older FileMaker Server (2025 / FMS22 or earlier), web site on a separate server:**
+- **Web site on a separate server, FileMaker Server 26+** (the `X-FMS-Return-URL` fix):
+  **this repo**.
+- **Web site on a separate server, older FileMaker Server (2025 / FMS22 or earlier):**
   https://github.com/wimdecorte/fms-webd-oauth-remote
   That older setup also needs a companion that **must** run on the FileMaker Server box:
   https://github.com/wimdecorte/fms-webd-oauth-remote-companion
   The companion is required because pre-fix FMS could not return cross-origin, so a helper on
   the FMS origin was needed to relay the OAuth result back to the remote web site.
+- **Web site on the FileMaker Server box itself:**
+  https://github.com/wimdecorte/fms-webd-oauth-local
 
 This functionality already exists for logging in with regular FileMaker accounts, see:
 https://github.com/bharlow/fm-webdirect-custom
