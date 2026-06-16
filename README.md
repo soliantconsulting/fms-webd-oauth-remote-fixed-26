@@ -173,15 +173,28 @@ identity provider redirects to FileMaker Server (`fmsDNS`), and FileMaker Server
 browser a redirect (302) to the return URL on `webDNS` — neither the IdP nor FileMaker Server
 validates the `webDNS` certificate.
 
-To avoid the warning entirely, use your own certificate: put `server.crt` and `server.key` in
-a directory and point `CERT_DIR` at it, e.g.
+To avoid the warning entirely, use your own certificate: put the cert and key in a directory
+and point `CERT_DIR` at it, e.g.
 
 ```bash
 CERT_DIR=/path/to/certs ./container/run.sh
 ```
 
-`run.sh` mounts that directory at `/etc/nginx/certs` and the container uses it instead of
-generating one.
+`run.sh` mounts that directory at `/etc/nginx/certs`, and the container uses it instead of
+generating one. `CERT_DIR` combines with `WEBDNS` — set both to serve your own cert under a
+specific hostname. A few requirements:
+
+- **Exact filenames.** The two files must be named exactly `server.crt` and `server.key`
+  (these paths are hardcoded). Anything else is ignored and the container falls back to
+  generating a self-signed cert.
+- **`server.crt` is the full chain.** nginx serves the file as-is and does not build the
+  chain for you, so `server.crt` must contain the leaf certificate first, followed by any
+  intermediate(s), concatenated in one PEM file. (For example, Let's Encrypt's
+  `fullchain.pem` → `server.crt`, `privkey.pem` → `server.key`.) The root CA is not needed.
+- **Valid for the hostname.** The cert must be valid for the `WEBDNS` you browse to — an
+  exact-host, wildcard, or multi-domain (SAN) certificate all work, as long as it covers that
+  name. (A self-signed cert always matches because it is generated from `WEBDNS`; your own
+  cert only matches if you make it.)
 
 Enjoy!
 
