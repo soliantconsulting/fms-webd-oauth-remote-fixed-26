@@ -1,0 +1,14 @@
+FROM docker.io/library/ubuntu:24.04
+
+# nginx serves the files; openssl makes the self-signed cert; gettext-base provides envsubst.
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends nginx openssl gettext-base \
+	&& rm -rf /var/lib/apt/lists/*
+
+COPY container/nginx.conf.template /etc/nginx/nginx.conf.template
+COPY container/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 443
+
+ENTRYPOINT ["/entrypoint.sh"]
