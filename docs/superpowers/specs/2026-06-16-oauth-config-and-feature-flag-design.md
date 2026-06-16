@@ -138,10 +138,47 @@ All three Claris functions take/derive an absolute base from `fmsDNS` (`'https:/
 
 ## README
 
-Update `README.txt` to document, for the **remote** scenario: the `OAUTH_CONFIG` keys
-(`dbName`, `fmsDNS`, `webDNS`, `identityProvider`, `autoStartOAuth`, `useFullPageRedirect`,
-`logLevel`), the two modes and how `X-FMS-Return-URL` differs between them, and a note that
-the popup mode now works because Claris allows a cross-origin return URL on `webDNS`.
+Clean up and rewrite `README.txt` for the **remote** scenario. It should cover:
+
+- **What this is / which version to use.** State that this setup targets the FMS release
+  where Claris fixed `X-FMS-Return-URL` to allow a cross-origin return to your own web
+  server. Add a **"Older FileMaker Server (2025 / FMS22 or earlier)"** section pointing to
+  the sibling repos that handle that case:
+  - https://github.com/wimdecorte/fms-webd-oauth-remote — the remote site files for older
+    FMS.
+  - https://github.com/wimdecorte/fms-webd-oauth-remote-companion — a **companion that must
+    run on the FMS box**, required by the older-FMS remote setup (because pre-fix FMS could
+    not return cross-origin, so a helper on the FMS origin was needed).
+
+  Also keep the existing pointer to the local (FMS-hosted) sibling
+  https://github.com/wimdecorte/fms-webd-oauth-local and the
+  [bharlow/fm-webdirect-custom](https://github.com/bharlow/fm-webdirect-custom) reference.
+
+- **Configuration.** Document the `OAUTH_CONFIG` keys (`dbName`, `fmsDNS`, `webDNS`,
+  `identityProvider`, `autoStartOAuth`, `useFullPageRedirect`, `logLevel`) and the
+  copy-`oauth-config.example.js`-to-`oauth-config.js` workflow. Emphasize the `fmsDNS`
+  (FileMaker Server box) vs `webDNS` (this web server box) distinction.
+
+- **The two modes**, including how `X-FMS-Return-URL` differs between them, and a note that
+  popup mode now works because Claris allows a cross-origin return URL on `webDNS`.
+
+### Flow diagrams (one per mode)
+
+Include an ASCII flow diagram for **each** mode so a reader can follow which window each step
+runs in and where `X-FMS-Return-URL` points. ASCII (not an image) keeps it readable in a
+plain-text `README.txt`. The diagrams must make these points clear:
+
+- **Popup mode** — parent page on `webDNS` stays open; a popup carries the IdP login; FMS
+  returns the **popup** to `https://<webDNS>/oauth-landing.html`; that page writes
+  `localStorage`; the parent (same origin) hears the `storage` event and calls
+  `doOAuthLogin` → POST to `fmsDNS`.
+- **Full-page mode** — the single `index.html` tab navigates to the IdP; request id saved to
+  `sessionStorage` first; FMS returns the **tab** to the index URL on `webDNS` with the
+  result in the query string; `resumeOAuthAfterRedirect` reads it and calls `doOAuthLogin` →
+  POST to `fmsDNS`; URL is then cleaned.
+
+Each diagram should show the three actors (Browser on `webDNS`, FileMaker Server `fmsDNS`,
+Identity Provider) and the `X-FMS-Return-URL` value used.
 
 ## Out of scope
 
@@ -164,3 +201,7 @@ the popup mode now works because Claris allows a cross-origin return URL on `web
 - `custom.html` is removed; `index.html` contains no inline OAuth logic.
 - The structure parallels the sibling repo except for the intentionally-omitted
   `postMessage` path and the relative-vs-absolute URL adaptation.
+- `README.txt` is cleaned up, documents `OAUTH_CONFIG` and both modes, includes an ASCII
+  flow diagram per mode, and references the older-FMS sibling repos
+  (`fms-webd-oauth-remote` + its FMS-box `fms-webd-oauth-remote-companion`) alongside the
+  local sibling.
