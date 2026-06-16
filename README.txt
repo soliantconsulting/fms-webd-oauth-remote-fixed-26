@@ -1,17 +1,113 @@
-This sample website shows how you can start the OAuth login flow into a WebDirect file, right from your own web site.
-Without taking the user to the WebDirect launch center or the WebDirect file's login screen.
+This sample website shows how you can start the OAuth login flow into a WebDirect file,
+right from your own web site, without taking the user to the WebDirect launch center or
+the WebDirect file's login screen.
 
-Based on the Claris utility described here:
-https://support.claris.com/s/answerview?anum=000035915
+This version is for a web site that does NOT run on FileMaker Server. The web server
+(webDNS) and the FileMaker Server (fmsDNS) are two different boxes. It requires no HTML or
+JS files to be installed on FileMaker Server.
 
-This version is for use on web site that does not run on FileMaker Server.
-It does require no HTML or JS files to be installed on your FileMaker Server
+It targets the FileMaker Server release where Claris fixed X-FMS-Return-URL so that FMS can
+return the OAuth result to a cross-origin URL on your own web server. That fix is what makes
+the popup flow below work when the files are hosted off-server.
 
-See this blog post for how it works:
-<TBD>
+Which repo do I use?
+--------------------
+- This repo: web site on a separate server, modern FileMaker Server (X-FMS-Return-URL fix).
+- Web site hosted ON FileMaker Server: https://github.com/wimdecorte/fms-webd-oauth-local
+- Older FileMaker Server (2025 / FMS22 or earlier), web site on a separate server:
+    https://github.com/wimdecorte/fms-webd-oauth-remote
+  That older setup also needs a companion that MUST run on the FileMaker Server box:
+    https://github.com/wimdecorte/fms-webd-oauth-remote-companion
+  The companion is required because pre-fix FMS could not return cross-origin, so a helper
+  on the FMS origin was needed to relay the OAuth result back to the remote web site.
 
-This functionality to fully customize the login experience already exists for logging in with regular FileMaker accounts, see this resource:
+This functionality already exists for logging in with regular FileMaker accounts, see:
 https://github.com/bharlow/fm-webdirect-custom
+
+Configuration (assets/js/oauth-config.js)
+------------------------------------------
+This demo is static HTML and JavaScript; the browser cannot read a .env file. Copy
+assets/js/oauth-config.example.js to assets/js/oauth-config.js and edit the values:
+
+  dbName              Published WebDirect file name to open after OAuth (no .fmp12).
+  fmsDNS              FileMaker Server box. Target of all API calls and the login POST.
+  webDNS              This web server box. Used for X-FMS-Return-URL and the home URL.
+  identityProvider    Provider name passed to getOAuthURL (must match the FMS OAuth config).
+  autoStartOAuth      When true, OAuth starts as soon as provider info loads. The Member
+                      Login button still shows for manual retry.
+  useFullPageRedirect Switch between popup (false, default) and full-page redirect (true).
+  logLevel            loglevel verbosity: trace | debug | info | warn | error | silent.
+
+The two modes (useFullPageRedirect)
+-----------------------------------
+Both modes run the same OAuth: getOAuthURL on FileMaker Server, the user signs in at the
+identity provider, and FileMaker Server completes the handshake. They differ only in WHERE
+FMS sends the result, set via X-FMS-Return-URL on the getOAuthURL call (see
+assets/js/oauth-utility-edit.js, getOAuthReturnUrl).
+
+  false (default) - POPUP MODE
+    X-FMS-Return-URL = https://<webDNS>/oauth-landing.html
+    The index page stays open and opens a popup for the IdP login. When FMS returns the
+    popup to oauth-landing.html (same origin as the index page, on webDNS), that page writes
+    the result to localStorage and the index page hears the "storage" event.
+
+  true - FULL-PAGE MODE
+    X-FMS-Return-URL = the index page's own URL on webDNS
+    The index tab itself navigates to the IdP (no popup). The request id is saved in
+    sessionStorage first. FMS returns the tab to the index URL with the result in the query
+    string; resumeOAuthAfterRedirect reads it and completes the login, then the query string
+    is stripped from the address bar.
+
+Popup mode flow
+---------------
+  Browser (webDNS)                 FileMaker Server (fmsDNS)        Identity Provider
+  ----------------                 -------------------------        -----------------
+  index.html onload
+    |
+    | getProviderInfo ------------------> /oauthapi/oauthproviderinfo
+    | (Member Login button)
+    |
+    | click -> open popup
+    | getOAuthURL ----------------------> /oauthapi/getoauthurl
+    |   X-FMS-Return-URL =                  (returns oauthUrl + X-FMS-Request-ID)
+    |   https://<webDNS>/oauth-landing.html
+    |
+    | popup -> oauthUrl ------------------------------------------------> IdP login
+    |                                                                        |
+    |                                     <-- FMS finishes handshake <-------+
+    |                                       redirects popup to
+    |   popup lands on  <---------------- https://<webDNS>/oauth-landing.html
+    |   oauth-landing.html (webDNS)
+    |     writes localStorage 'oauth-response', closes popup
+    |
+    | index hears "storage" event (same origin)
+    | doOAuthLogin --------------------> POST /fmi/webd/<dbName>  (user=requestId, pwd=identifier)
+    |                                      -> WebDirect session opens (homeurl on webDNS)
+
+Full-page mode flow
+-------------------
+  Browser (webDNS)                 FileMaker Server (fmsDNS)        Identity Provider
+  ----------------                 -------------------------        -----------------
+  index.html onload
+    |
+    | getProviderInfo ------------------> /oauthapi/oauthproviderinfo
+    | (Member Login button)
+    |
+    | click
+    | getOAuthURL ----------------------> /oauthapi/getoauthurl
+    |   X-FMS-Return-URL =                  (returns oauthUrl + X-FMS-Request-ID)
+    |   https://<webDNS>/index.html
+    | save requestId -> sessionStorage
+    |
+    | this TAB -> oauthUrl ---------------------------------------------> IdP login
+    |                                                                        |
+    |                                     <-- FMS finishes handshake <-------+
+    |                                       redirects tab to
+    | tab returns to  <----------------- https://<webDNS>/index.html?trackingID=...&identifier=...
+    |   index.html (webDNS)
+    |   initOAuth -> resumeOAuthAfterRedirect reads query string + sessionStorage requestId
+    | doOAuthLogin --------------------> POST /fmi/webd/<dbName>  (user=requestId, pwd=identifier)
+    | strip query string from URL          -> WebDirect session opens (homeurl on webDNS)
 
 Enjoy!
 
