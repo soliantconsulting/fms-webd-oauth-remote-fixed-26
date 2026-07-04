@@ -83,13 +83,17 @@ function showOAuthError(result) {
 	renderLoginButton();
 }
 
-function completeIndexOAuth(identifier, autherr, requestId) {
+function completeIndexOAuth(result) {
+	if (isOAuthErrorResponse(result)) {
+		showOAuthError(result);
+		return;
+	}
 	doOAuthLogin(
 		OAUTH_CONFIG.dbName,
-		requestId,
-		identifier,
+		result.requestId,
+		result.identifier,
 		'https://' + OAUTH_CONFIG.webDNS + '/index.html',
-		autherr,
+		result.error,
 		OAUTH_CONFIG.fmsDNS
 	);
 }
@@ -108,23 +112,10 @@ function initOAuth() {
 
 	getProviderInfo(OAUTH_CONFIG.fmsDNS, function (providerInfo) {
 		if (providerInfo != null && providerInfo != '') {
-			var button = document.createElement('button');
-			var oauthWrapper = document.getElementById('inner');
-			var providerName = getIdentityProviderName();
-
-			button.innerHTML = 'Member Login';
-			button.style.width = '350px';
-			button.style.height = '60px';
-			button.style.textAlign = 'center';
-			button.dataset.provider = providerInfo;
-			button.onclick = function () {
-				showOAuthLogin(providerName);
-			};
-
-			oauthWrapper.appendChild(button);
+			renderLoginButton(providerInfo);
 
 			if (shouldAutoStartOAuth()) {
-				showOAuthLogin(providerName);
+				showOAuthLogin(getIdentityProviderName());
 			}
 		}
 	});

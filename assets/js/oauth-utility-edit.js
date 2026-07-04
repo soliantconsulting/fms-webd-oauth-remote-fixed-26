@@ -30,7 +30,7 @@ function getProviderInfo(fmsDNS, callback) {
  */
 function getOAuthReturnUrl() {
 	if (OAUTH_CONFIG.useFullPageRedirect) {
-		return window.location.href.split('#')[0];
+		return window.location.origin + window.location.pathname;
 	}
 	return 'https://' + OAUTH_CONFIG.webDNS + '/oauth-landing.html';
 }

@@ -99,18 +99,15 @@ function tryCompleteOAuthResponse(response, trackingId, requestId, onComplete) {
 		return false;
 	}
 
-	var retTrackingId = getOAuthResponseParameter(response, 'trackingID');
-	if (trackingId !== retTrackingId) {
+	var result = parseOAuthResponse(response);
+	if (trackingId !== result.trackingID) {
 		return false;
 	}
 
 	localStorage.removeItem(OAUTH_STORAGE_KEY);
 	clearOAuthSessionState();
-	onComplete(
-		getOAuthResponseParameter(response, 'identifier'),
-		getOAuthResponseParameter(response, 'error'),
-		requestId
-	);
+	result.requestId = requestId;
+	onComplete(result);
 	return true;
 }
 
