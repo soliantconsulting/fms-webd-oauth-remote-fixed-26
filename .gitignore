@@ -5,3 +5,6 @@ index.html.cloud
 oauth-utility.js
 custom.html
 vmi.html
+
+# macOS
+.DS_Store
