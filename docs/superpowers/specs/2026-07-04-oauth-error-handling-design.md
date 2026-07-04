@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-04
 **Status:** Approved design, pending implementation plan
-**Scope:** Client-side JS only (`assets/js/oauth-flow.js`, `assets/js/oauth-index.js`) + a Node parser test. No FMS-side or server changes.
+**Scope:** Client-side JS only (`assets/js/oauth-flow.js`, `assets/js/oauth-index.js`, `assets/js/oauth-utility-edit.js`) + a Node parser test. No FMS-side or server changes.
 
 ## Problem
 
@@ -78,7 +78,7 @@ Normalize the input before splitting so stray `?` characters act as parameter de
 code (e.g. `1627`); it is present in full-page-redirect responses and simply absent (empty) in
 popup-mode responses.
 
-### 2. Stop the compounding — `assets/js/oauth-flow.js` (`getOAuthReturnUrl`)
+### 2. Stop the compounding — `assets/js/oauth-utility-edit.js` (`getOAuthReturnUrl`)
 
 Change the full-page branch from `window.location.href.split('#')[0]` to
 `window.location.origin + window.location.pathname`. The return URL sent to FMS is then always
@@ -151,7 +151,8 @@ Written first (fails against current code), then the implementation makes it pas
 
 ## Files touched
 
-- `assets/js/oauth-flow.js` — normalize parsing, add `parseOAuthResponse` / `isOAuthErrorResponse`, clean return URL, pass result object to `onComplete`.
+- `assets/js/oauth-flow.js` — normalize parsing, add `parseOAuthResponse` / `isOAuthErrorResponse`, pass result object to `onComplete`.
+- `assets/js/oauth-utility-edit.js` — clean return URL in `getOAuthReturnUrl` (`origin + pathname`).
 - `assets/js/oauth-index.js` — `completeIndexOAuth` branches on error, `showOAuthError`, shared `renderLoginButton`, `initOAuth` restructure.
 - `test/oauth-parse.test.js` — new Node parser test.
 
