@@ -4,6 +4,85 @@
  * login by POSTing to FileMaker Server (fmsDNS) and sending the user home on webDNS.
  */
 
+var OAUTH_ERROR_MESSAGES = {
+	'1627': 'You signed in with Microsoft, but this account isn’t authorized to open this database. Contact your administrator to confirm your access.',
+	'default': 'Sign-in didn’t complete. Please try again, or contact your administrator if the problem continues.'
+};
+
+function oauthErrorMessage(result) {
+	var code = result.loginerr || result.error;
+	if (code && OAUTH_ERROR_MESSAGES[code]) {
+		return OAUTH_ERROR_MESSAGES[code];
+	}
+	return OAUTH_ERROR_MESSAGES['default'];
+}
+
+function renderLoginButton(providerInfo) {
+	if (document.getElementById('oauth-login-btn')) {
+		return;
+	}
+
+	var oauthWrapper = document.getElementById('inner');
+	var providerName = getIdentityProviderName();
+	var button = document.createElement('button');
+
+	button.id = 'oauth-login-btn';
+	button.innerHTML = 'Member Login';
+	button.style.width = '350px';
+	button.style.height = '60px';
+	button.style.textAlign = 'center';
+	if (providerInfo) {
+		button.dataset.provider = providerInfo;
+	}
+	button.onclick = function () {
+		showOAuthLogin(providerName);
+	};
+
+	oauthWrapper.appendChild(button);
+}
+
+function showOAuthError(result) {
+	var wrapper = document.getElementById('inner');
+	var existing = document.getElementById('oauth-message');
+	if (existing) {
+		existing.parentNode.removeChild(existing);
+	}
+
+	var box = document.createElement('div');
+	box.id = 'oauth-message';
+	box.style.margin = '1.5em auto';
+	box.style.maxWidth = '600px';
+	box.style.padding = '1em 1.25em';
+	box.style.borderLeft = '4px solid #e8505b';
+	box.style.background = 'rgba(232, 80, 91, 0.12)';
+	box.style.textAlign = 'left';
+	box.style.borderRadius = '4px';
+
+	var msg = document.createElement('p');
+	msg.style.margin = '0 0 0.5em 0';
+	msg.textContent = oauthErrorMessage(result);
+	box.appendChild(msg);
+
+	var detailBits = [];
+	if (result.loginerr) {
+		detailBits.push('FileMaker error ' + result.loginerr);
+	} else if (result.error) {
+		detailBits.push('Error ' + result.error);
+	}
+	if (result.trackingID) {
+		detailBits.push('Tracking ID ' + result.trackingID);
+	}
+	if (detailBits.length) {
+		var detail = document.createElement('small');
+		detail.style.opacity = '0.7';
+		detail.textContent = detailBits.join(' · ');
+		box.appendChild(detail);
+	}
+
+	wrapper.appendChild(box);
+	renderLoginButton();
+}
+
 function completeIndexOAuth(identifier, autherr, requestId) {
 	doOAuthLogin(
 		OAUTH_CONFIG.dbName,
