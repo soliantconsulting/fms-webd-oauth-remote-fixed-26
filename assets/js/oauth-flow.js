@@ -16,7 +16,7 @@ function getOAuthResponseParameter(input, parameter) {
 	if (input != null) {
 		var params, pair, i;
 
-		params = input.split('&');
+		params = input.replace(/\?/g, '&').split('&');
 		for (i = 0; i < params.length; i++) {
 			pair = params[i].split('=');
 			if (pair != null && pair.length == 2) {
@@ -27,6 +27,28 @@ function getOAuthResponseParameter(input, parameter) {
 		}
 	}
 	return '';
+}
+
+function parseOAuthResponse(raw) {
+	return {
+		trackingID: getOAuthResponseParameter(raw, 'trackingID'),
+		identifier: getOAuthResponseParameter(raw, 'identifier'),
+		error: getOAuthResponseParameter(raw, 'error'),
+		loginerr: getOAuthResponseParameter(raw, 'loginerr')
+	};
+}
+
+function isOAuthErrorResponse(result) {
+	if (!result) {
+		return true;
+	}
+	if (!result.identifier || result.identifier === '-1') {
+		return true;
+	}
+	if (result.error && result.error !== '0') {
+		return true;
+	}
+	return false;
 }
 
 function useFullPageRedirect() {
