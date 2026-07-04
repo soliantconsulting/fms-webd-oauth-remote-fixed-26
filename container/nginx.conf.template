@@ -1,0 +1,27 @@
+user www-data;
+worker_processes 1;
+events { worker_connections 1024; }
+
+http {
+	include       /etc/nginx/mime.types;
+	default_type  application/octet-stream;
+	sendfile      on;
+
+	server {
+		listen 443 ssl;
+		server_name ${WEBDNS};
+
+		ssl_certificate     /etc/nginx/certs/server.crt;
+		ssl_certificate_key /etc/nginx/certs/server.key;
+
+		root /usr/share/nginx/html;
+		index index.html;
+
+		# Test container: never cache, so edits to the mounted repo show on refresh.
+		add_header Cache-Control "no-store";
+
+		location / {
+			try_files $uri $uri/ =404;
+		}
+	}
+}

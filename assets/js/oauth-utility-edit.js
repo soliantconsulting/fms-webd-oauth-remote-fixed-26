@@ -1,3 +1,10 @@
+/**
+ * The three Claris WebDirect OAuth API primitives, adapted for the remote scenario:
+ * every FMS-directed URL is absolute (https://<fmsDNS>...), and the OAuth return URL
+ * points at this web server (webDNS) so the Claris X-FMS-Return-URL cross-origin fix
+ * brings the user/popup back to our pages. See README.md and oauth-flow.js.
+ */
+
 function getProviderInfo(fmsDNS, callback) {
 	var xhr = new XMLHttpRequest();
 	var server = 'https://' + fmsDNS;
@@ -6,8 +13,6 @@ function getProviderInfo(fmsDNS, callback) {
 			var providerInfo = null;
 			if (xhr.status == 200 && xhr.responseText != null && xhr.responseText != '') {
 				providerInfo = xhr.responseText;
-				const allHeaders = xhr.getAllResponseHeaders();
-        console.log("allHeaders", allHeaders);
 			}
 			if (callback) {
 				callback(providerInfo);
@@ -18,52 +23,41 @@ function getProviderInfo(fmsDNS, callback) {
 	xhr.send();
 }
 
+/**
+ * Where FMS should send the user/popup once the IdP handshake is done.
+ * Popup mode: our landing page on webDNS (writes localStorage; parent hears storage event).
+ * Full-page mode: this page's own URL on webDNS (result arrives in the query string).
+ */
+function getOAuthReturnUrl() {
+	if (OAUTH_CONFIG.useFullPageRedirect) {
+		return window.location.origin + window.location.pathname;
+	}
+	return 'https://' + OAUTH_CONFIG.webDNS + '/oauth-landing.html';
+}
+
 function getOAuthURL(trackingId, fmsDNS, provider, callback) {
 	var xhr, queryStr;
 	var fmsUrl = 'https://' + fmsDNS;
-	console.log("getOAuthURL", trackingId, fmsDNS, provider);
-	console.log("fmsUrl", fmsUrl);
 	xhr = new XMLHttpRequest();
 	xhr.onreadystatechange = function () {
-		// states: 0 = UNSENT, 1 = OPENED, 2 = HEADERS_RECEIVED, 3 = LOADING, 4 = DONE
-		// these will happen in that order
-		if (xhr.readyState == 4 && xhr.status == 200) {
+		if (xhr.readyState == 4) {
 			if (callback) {
-				var requestID = xhr.getResponseHeader('X-FMS-Request-ID');
-				var responseText = xhr.responseText;
-				// console.log("xhr.responseText", xhr.responseText);
-				// send back both the actual URL and the requestId (first of the two pieces needed for actual login)
-				callback(responseText, requestID);
+				if (xhr.status == 200 && xhr.responseText != null && xhr.responseText != '') {
+					callback(xhr.responseText, xhr.getResponseHeader('X-FMS-Request-ID'));
+				} else {
+					callback(null, null);
+				}
 			}
 		}
 	};
 	queryStr = 'trackingID=' + trackingId + '&provider=' + provider + '&address=' + fmsDNS + '&X-FMS-OAuth-AuthType=2';
-	console.log("GET URL", fmsUrl + '/fmi/webd/oauthapi/getoauthurl?' + queryStr);
 	xhr.open('GET', fmsUrl + '/fmi/webd/oauthapi/getoauthurl?' + queryStr, true);
 	xhr.setRequestHeader('X-FMS-Application-Type', '8');
-	// xhr.setRequestHeader('X-FMS-Application-Version', '17');
-	// this is where FMS will redirect to once it is done, the identifier will be in the URL at this point
-	
-	// set it to the oauth landing page on the caller
-	// xhr.setRequestHeader('X-FMS-Return-URL', window.location.origin + '/oauth-landing.html');
-	// console.log("X-FMS-Return-URL", window.location.origin + '/oauth-landing.html');
-	
-	// set it to the oauth landing page on the FMS box
-	xhr.setRequestHeader('X-FMS-Return-URL', fmsUrl + '/fmi/webd/oauth-landing.html');
-	console.log("X-FMS-Return-URL", fmsUrl + '/fmi/webd/oauth-landing.html');
+	xhr.setRequestHeader('X-FMS-Return-URL', getOAuthReturnUrl());
 	xhr.send();
 }
 
-
 function doOAuthLogin(dbName, requestId, identifier, homeurl, autherr, fmsDNS) {
-	log.debug("doOAuthLogin", {
-		dbName: dbName,
-		requestId: requestId,
-		identifier: identifier,
-		homeurl: homeurl,
-		autherr: autherr,
-		fmsDNS: fmsDNS
-	});
 	var form, node, queryStr;
 	var server = 'https://' + fmsDNS;
 

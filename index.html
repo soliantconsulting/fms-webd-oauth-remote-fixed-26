@@ -15,115 +15,6 @@
 		<link rel="stylesheet" href="assets/css/noscript.css" />
 	</noscript>
 	<script src="https://unpkg.com/loglevel/dist/loglevel.min.js"></script>
-	<script>
-
-		// config area
-		var dbName = "OAuth_tester";
-		var fmsDNS = 'mbp2013.ets.fm';
-		var thisDNS = 'webdlogin.ets.fm';
-		var OauthProvider = "Microsoft";
-		var homeUrl = "https://" + thisDNS + "/index.html";
-		// levels: trace/debug/info/warn/error
-		log.setLevel("debug"); // set to silent disable logging
-		// end config area
-
-		// log the full config
-		log.debug("config:", {
-			dbName: dbName,
-			fmsDNS: fmsDNS,
-			thisDNS: thisDNS,
-			OauthProvider: OauthProvider,
-			homeUrl: homeUrl,
-		});
-
-		let fmsWindow;
-
-		function initOAuth() {
-			// we can get the provider info from FMS through Admin API calls
-			// but for now we'll hardcode the provider info
-
-			getProviderInfo(fmsDNS, function (providerInfo) {
-				// Generate OAuth UI from the list of supported providers
-				// Here we just hardcode one button for Keycloak OAuth
-				if (providerInfo != null && providerInfo != "") {
-					let button = document.createElement("button");
-					button.innerHTML = 'Member Login';
-					button.style.width = '350px';
-					button.style.height = '60px';
-					button.style.textAlign = 'center';
-					button.dataset.provider = providerInfo;
-					button.onclick = function () {
-						//getLoginInfoFromFMS();
-						showOAuthLogin();
-					}
-
-					let oauthWrapper = document.getElementById("inner");
-					oauthWrapper.appendChild(button);
-				}
-			});
-		}
-
-		function showOAuthLogin() {
-			// console.log("fmsDNS", fmsDNS);
-			// console.log("OauthProvider", OauthProvider);
-			let child = window.open("", OauthProvider, "width=800, height=600");
-			let trackingId = "123432";
-			let master = window.location.hostname;
-
-			function OAuthUrlCallback(oauthUrl, requestId) {
-				log.debug("callback_getOAuthURL", {
-					oauthUrl: oauthUrl,
-					requestId: requestId
-				});
-
-				child.location.replace(oauthUrl);
-
-				// we don't seem to get past this point - the child window for auth shows, auth process finishes
-				// but the response is not processed
-
-				// Listen to localstorage event to receive response from OAuth provider
-				function processOAuthResponse(event) {
-					log.debug("processOAuthResponse", {
-						event: event
-					});
-
-					// Response from OAuth provider
-					// Sample format: "trackingID=123432&identifier=83FF55EF5B8B1442D702C19DF63115BC&error=0"
-					let response = event.newValue;
-
-					let retTrackingId = getOAuthResponseParameter(response, 'trackingID');
-					let retIdentifier = getOAuthResponseParameter(response, 'identifier');
-					let retError = getOAuthResponseParameter(response, 'error');
-
-					log.debug("processOAuthResponse", {
-						retIdentifier: retIdentifier,
-						retError: retError
-					});
-
-					// Compare tracking ID against returned one to make sure
-					// this is the correct response to process
-					if (trackingId == retTrackingId) {
-						window.removeEventListener("storage", processOAuthResponse);
-						localStorage.removeItem('oauth-response');
-						log.debug("response after login", response);
-						doOAuthLogin(dbName, requestId, retIdentifier, homeUrl, retError, fmsDNS);
-					}
-					else {
-						log.debug("tracking ids do not match:", {
-							trackingId: trackingId,
-							retTrackingId: retTrackingId,
-							response: response
-						});
-					}
-				}
-
-				window.addEventListener("storage", processOAuthResponse);
-			}
-
-			getOAuthURL(trackingId, fmsDNS, OauthProvider, OAuthUrlCallback);
-		}
-
-	</script>
 </head>
 
 <body class="is-preload" onload="initOAuth()">
@@ -175,7 +66,10 @@
 	<script src="assets/js/breakpoints.min.js"></script>
 	<script src="assets/js/util.js"></script>
 	<script src="assets/js/main.js"></script>
+	<script src="assets/js/oauth-config.js"></script>
 	<script src="assets/js/oauth-utility-edit.js"></script>
+	<script src="assets/js/oauth-flow.js"></script>
+	<script src="assets/js/oauth-index.js"></script>
 
 </body>
 
