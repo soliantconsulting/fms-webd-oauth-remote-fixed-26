@@ -50,13 +50,37 @@ function showOAuthError(result) {
 
 	var box = document.createElement('div');
 	box.id = 'oauth-message';
+	box.style.position = 'relative';
 	box.style.margin = '1.5em auto';
 	box.style.maxWidth = '600px';
-	box.style.padding = '1em 1.25em';
+	box.style.padding = '1em 2.5em 1em 1.25em';
 	box.style.borderLeft = '4px solid #e8505b';
 	box.style.background = 'rgba(232, 80, 91, 0.12)';
 	box.style.textAlign = 'left';
 	box.style.borderRadius = '4px';
+
+	var close = document.createElement('button');
+	close.type = 'button';
+	close.setAttribute('aria-label', 'Dismiss');
+	close.textContent = '×';
+	close.style.position = 'absolute';
+	close.style.top = '0.35em';
+	close.style.right = '0.5em';
+	close.style.width = '1.4em';
+	close.style.height = '1.4em';
+	close.style.padding = '0';
+	close.style.lineHeight = '1';
+	close.style.border = '0';
+	close.style.background = 'transparent';
+	close.style.color = 'inherit';
+	close.style.fontSize = '1.4em';
+	close.style.cursor = 'pointer';
+	close.onclick = function () {
+		if (box.parentNode) {
+			box.parentNode.removeChild(box);
+		}
+	};
+	box.appendChild(close);
 
 	var msg = document.createElement('p');
 	msg.style.margin = '0 0 0.5em 0';
