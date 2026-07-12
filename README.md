@@ -43,6 +43,35 @@ This demo is static HTML and JavaScript; the browser cannot read a `.env` file. 
 | `useFullPageRedirect` | Switch between popup (`false`, default) and full-page redirect (`true`). |
 | `logLevel` | loglevel verbosity: `trace` \| `debug` \| `info` \| `warn` \| `error` \| `silent`. |
 
+## Server-side setup (FileMaker Server)
+
+Because this page lives on `webDNS` and calls FileMaker Server on `fmsDNS`, the browser treats
+those calls as **cross-origin**. FileMaker Server must be configured to allow them, or the login
+never starts. **Do these steps in order on the FMS host** (the order matters — the CORS script
+reads the allowed domains *from* FMS, so FMS is configured first):
+
+1. **OAuth Allow List** — Admin Console → **Administration → External Authentication → OAuth Allow
+   List**: enable it and add each `webDNS` origin (e.g. `wim.ets.fm`, and others if several sites
+   share this server).
+2. **Custom Home URL** — Admin Console → **Connectors → Web Publishing → Claris FileMaker
+   WebDirect**: set to `https://<webDNS>` (the OAuth return URL FMS will honor).
+3. **CORS policy** — run [`scripts/patch-fms-nginx-cors.sh`](scripts/patch-fms-nginx-cors.sh) on
+   the FMS box. With no arguments it defaults to `--from-fms`, deriving the nginx CORS allowlist
+   from step 1 so the two layers stay in sync:
+   ```bash
+   sudo ./patch-fms-nginx-cors.sh --dry-run   # preview
+   sudo ./patch-fms-nginx-cors.sh             # apply (default = --from-fms)
+   ```
+   (For a one-off single origin: `sudo ./patch-fms-nginx-cors.sh https://<webDNS>`. Wildcard
+   `'*'` is demo-only.)
+4. **Syntax-check + restart** — `sudo ./patch-fms-nginx-cors.sh --nginx-test --passphrase ''`
+   (empty passphrase for a no-passphrase key), then `fmsadmin restart httpserver`.
+
+The script is re-runnable and idempotent — worth keeping because **FMS regenerates its nginx
+config on upgrade**, reverting the CORS block to stock; just re-run step 3. See
+[`docs/fms-server-cors-config.md`](docs/fms-server-cors-config.md) for the full walkthrough
+(Quick start at the top), the by-hand alternative, and troubleshooting.
+
 ## Debug logging
 
 Logging uses the [loglevel](https://github.com/pimterry/loglevel) library, loaded from a CDN

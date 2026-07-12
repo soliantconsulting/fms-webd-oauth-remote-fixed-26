@@ -22,6 +22,57 @@ server-side changes:
 
 ---
 
+## Quick start (recommended, end-to-end)
+
+Do these **in order** on the FileMaker Server host (Ubuntu 22, FMS **26.1.1.15+**). The order
+matters: the script's default mode reads the allowed domains *from* FMS, so **FMS must be
+configured first**.
+
+1. **Configure the OAuth Allow List in the Admin Console — do this first.**
+   Admin Console → **Administration → External Authentication → OAuth Allow List** →
+   **Change**. Enable it and add each web origin that will host a login page — the `webDNS`
+   host(s), e.g. `wim.ets.fm` (add `site.ets.fm` too if several sites share this server). Save.
+   *(This is the list the script reads in step 3. If it is empty or disabled, the script stops
+   and tells you to do this first.)*
+
+2. **Set the Custom Home URL** (the WebDirect post-login return).
+   Admin Console → **Connectors → Web Publishing** → **Claris FileMaker WebDirect** →
+   **Custom Home URL** → **Change** → enter `https://<webDNS>` and save. See [section 2](#2-allow-the-webdirect-home-url).
+
+3. **Patch the nginx CORS policy** — copy [`scripts/patch-fms-nginx-cors.sh`](../scripts/patch-fms-nginx-cors.sh)
+   to the box and run it. With no arguments it defaults to `--from-fms`, deriving the CORS
+   allowlist from what you set in step 1:
+   ```bash
+   sudo ./patch-fms-nginx-cors.sh --dry-run     # preview the change first
+   sudo ./patch-fms-nginx-cors.sh               # apply (defaults to --from-fms)
+   ```
+
+4. **Syntax-check nginx** (the script can do it; see [Check the syntax](#check-the-syntax) for why
+   the passphrase handling is fiddly):
+   ```bash
+   # custom cert whose key has NO passphrase (common): pass an empty string
+   sudo ./patch-fms-nginx-cors.sh --nginx-test --passphrase ''
+   # key WITH a passphrase: pass it
+   sudo ./patch-fms-nginx-cors.sh --nginx-test --passphrase 'YOUR_SSL_PASSPHRASE'
+   ```
+
+5. **Restart the web server** to make the config live (needs Admin Console credentials):
+   ```bash
+   fmsadmin restart httpserver
+   ```
+
+6. **Enable WebDirect** if it isn't already (Admin Console → Connectors → Web Publishing) — the
+   OAuth endpoints return `502` until it is up. Then load your page on `webDNS` and sign in.
+
+> **When FMS regenerates the config** (on upgrade, and sometimes on restart) the CORS block
+> reverts to stock. Just re-run step 3 — the script is idempotent and safe to run any time.
+> If you later change the OAuth Allow List (step 1), re-run step 3 so nginx matches.
+
+The rest of this document explains each piece in detail, plus a by-hand alternative and
+troubleshooting.
+
+---
+
 ## 1. CORS policy in the FMS nginx config
 
 Config file:
@@ -29,6 +80,95 @@ Config file:
 ```
 /opt/FileMaker/FileMaker Server/NginxServer/conf/fms_nginx.conf
 ```
+
+### Automated: use the script
+
+If you would rather not hand-edit, run
+[`scripts/patch-fms-nginx-cors.sh`](../scripts/patch-fms-nginx-cors.sh) **on the FileMaker Server
+host**. Copy the script to the box, then:
+
+```bash
+# Recommended: derive CORS allowlist from the FMS OAuth Allow List (default)
+sudo ./patch-fms-nginx-cors.sh --from-fms
+# preview first with:  sudo ./patch-fms-nginx-cors.sh --dry-run --from-fms
+
+# Or specify a single origin:
+sudo ./patch-fms-nginx-cors.sh https://<webDNS>      # e.g. https://wim.ets.fm
+
+# Or wildcard (demo only):
+sudo ./patch-fms-nginx-cors.sh '*'
+```
+
+It applies the CORS edit described below — in **both** `server` blocks, with `always` on every
+line — backs up the original, is **idempotent** (re-run any time FMS regenerates the config on
+upgrade), and prints the `nginx -t` / `fmsadmin restart httpserver` commands to finish.
+
+To also run the syntax check, add `--nginx-test` and supply the SSL key passphrase (needed because
+nginx reads it from a FIFO — see [Check the syntax](#check-the-syntax) below):
+
+```bash
+# key WITH a passphrase:
+sudo ./patch-fms-nginx-cors.sh --from-fms --nginx-test --passphrase 'YOUR_SSL_PASSPHRASE'
+# key with NO passphrase (e.g. a deployed custom cert) — pass an EMPTY string:
+sudo ./patch-fms-nginx-cors.sh --from-fms --nginx-test --passphrase ''
+# (or export FMS_SSL_PASSPHRASE=... beforehand instead of --passphrase)
+```
+
+`--passphrase ''` (empty) is a real value: it feeds an empty line to the FIFO, which is what a
+no-passphrase key expects. **Omitting** `--passphrase` entirely is different — the script then
+skips the check (so it can't hang) and prints the manual command instead.
+
+It deliberately does **not** touch the SSL certificate/key or the port-80 include (those are
+environment-specific to a custom-cert setup, not to this OAuth flow), and it does **not** set the
+Custom Home URL — section 2 below is still a manual Admin Console step.
+
+#### Allowing multiple web origins
+
+Starting with FileMaker Server 26.1.1.15, the FMS Admin Console supports an **OAuth Allow List**
+(External Authentication → OAuth Allow List) that accepts multiple allowed domains for programmatic
+OAuth / `X-FMS-Return-URL` requests. On the box this is stored in
+`/fms/Data/Preferences/dbs_config.xml` as `OAuthDomainName` (comma-separated hostnames) and
+`OAuthAllowList` (0/1 toggle).
+
+The script's **`--from-fms`** mode (the default when no arguments given) reads this list and
+generates an nginx `map` block that echoes the request `Origin` header back only when it exactly
+matches an allowlisted value — the standard nginx idiom for multi-origin CORS. Because FMS and nginx
+now derive from the same source, they cannot silently drift; changing domains in Admin Console means
+re-running `--from-fms` to update the nginx side.
+
+**How it works:**
+
+The `Access-Control-Allow-Origin` (ACAO) header holds exactly one value, or `*` — never a space or
+comma list. To allow *several specific origins*, nginx uses a `map` that sets a variable based on
+the incoming `Origin` request header:
+
+```nginx
+map $http_origin $fms_cors_allow_origin {
+    default        "";
+    "https://wim.ets.fm"   "https://wim.ets.fm";
+    "https://site.ets.fm"  "https://site.ets.fm";
+}
+```
+
+The server blocks then reference `$fms_cors_allow_origin` instead of a static value:
+
+```nginx
+add_header 'Access-Control-Allow-Origin' $fms_cors_allow_origin always;
+```
+
+When the browser's `Origin` is `https://wim.ets.fm`, nginx echoes it back; when it's
+`https://evil.example.com`, the map's `default ""` means the ACAO header is omitted entirely, and
+the browser blocks the response — the correct deny behavior.
+
+The two layers (FMS's OAuth return-URL authorization and nginx's CORS browser gate) are enforced
+independently. If you must CORS-allow an origin FMS does not, use `--allow-origin` to union both
+sources; if you want them fully separate, skip `--from-fms` and supply origins manually. For the
+common case — one web origin or several all known to FMS — `--from-fms` keeps the layers in sync.
+
+For design details see
+[`docs/superpowers/specs/2026-07-12-cors-multi-origin-allowlist-design.md`](superpowers/specs/2026-07-12-cors-multi-origin-allowlist-design.md).
+
+The rest of this section documents the same change by hand.
 
 ### Stop the web server first
 
@@ -118,7 +258,9 @@ What changed:
 
 - **`Access-Control-Allow-Origin`** — the original `$hostname` line is commented out and
   replaced with `'*'`. *(For production, make this less permissive than a wildcard — set it
-  to your specific `webDNS` origin rather than `*`.)*
+  to your specific `webDNS` origin, or use the script's default `--from-fms` mode to allow the
+  exact set of origins from your FMS OAuth Allow List; see [Allowing multiple web
+  origins](#allowing-multiple-web-origins).)*
 - **`Access-Control-Allow-Headers`** — expanded to include the custom headers the Claris JS
   utility sends: `X-FMS-Application-Version`, `x-fms-application-type`, `X-FMS-Return-URL`,
   and `Origin`. The old two-value line is commented out.
@@ -145,12 +287,38 @@ What changed:
 ### Check the syntax
 
 FileMaker Server's nginx is separate from any system nginx, so `sudo nginx -t` alone tests
-the **wrong** config. Point `-t` at the FMS config explicitly (and feed it the SSL cert
-passphrase so the test can load the certificate):
+the **wrong** config. Point `-t` at the FMS config explicitly.
+
+You must also feed it the SSL key passphrase, and the way you do that matters. FMS's
+`ssl_password_file` is **not a regular file — it is a named pipe (FIFO)**:
+
+```bash
+ls -l "/opt/FileMaker/FileMaker Server/CStore/.passphrase"
+# prw-rw---- 1 fmserver fmsadmin 0 ... .passphrase   <-- leading 'p' = FIFO
+```
+
+`nginx -t` opens that FIFO to read the passphrase and **blocks until something writes to it**.
+So a bare `nginx -t` appears to hang forever. The fix is to write the passphrase into the FIFO
+from a **backgrounded** command (the trailing `&`) *before* nginx reads it:
 
 ```bash
 echo "your SSL cert passphrase here" > "/opt/FileMaker/FileMaker Server/CStore/.passphrase" & sudo nginx -t -c "/opt/FileMaker/FileMaker Server/NginxServer/conf/fms_nginx.conf"
 ```
+
+> **Which passphrase?** Use the passphrase for **whichever certificate FMS is currently
+> using** — i.e. the one named by `ssl_certificate` / `ssl_certificate_key` at the top of
+> `fms_nginx.conf`. With no custom certificate installed that is FMS's built-in **self-signed**
+> cert (`server.pem` / `privateKey.key`); once a custom cert is installed it is
+> `serverCustom.pem` / `serverKey.pem`. **If the key has no passphrase** (common for a deployed
+> custom cert), there is nothing to type — feed an **empty line** to the FIFO:
+>
+> ```bash
+> ( printf '\n' > "/opt/FileMaker/FileMaker Server/CStore/.passphrase" ) & \
+>   sudo nginx -t -c "/opt/FileMaker/FileMaker Server/NginxServer/conf/fms_nginx.conf"
+> ```
+
+> The [script](#automated-use-the-script) automates exactly this FIFO-feeding dance when you
+> pass `--nginx-test --passphrase '...'` — including `--passphrase ''` for a no-passphrase key.
 
 A successful test prints:
 
