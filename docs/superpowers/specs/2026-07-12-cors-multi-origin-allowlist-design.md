@@ -99,10 +99,12 @@ sudo ./patch-fms-nginx-cors.sh [ORIGIN] [--from-fms] [--allow-origin HOST]... \
 - **`--dbs-config PATH`** — override the FMS prefs path (default
   `/fms/Data/Preferences/dbs_config.xml`); mainly for testing against a copy.
 - Resolution rules (single source of truth for what gets emitted):
+  - **No positional and no flags → `--from-fms` (the default).** Running the script bare reads the
+    FMS OAuth Allow List and emits the map. This is the recommended, drift-free path.
   - **`--from-fms`** or **≥1 `--allow-origin`** → **map mode** (section 2). If both are given,
-    the sets are unioned. The positional `ORIGIN` is ignored in map mode (warn if also given).
-  - **neither, positional `*` or omitted** → **wildcard mode** (today's behavior).
-  - **neither, positional a specific origin** → **single-origin mode** (today's static header).
+    the sets are unioned. A positional `ORIGIN` given alongside is ignored in map mode (warn).
+  - **positional `*`** → **wildcard mode** (explicit opt-in to the permissive header).
+  - **positional a specific origin** → **single-origin mode** (static header).
 
 **Host normalization (accept bare hosts, assume `https://`).** FMS stores bare hosts
 (`wim.ets.fm`); a CORS `Origin` is scheme+host (`https://wim.ets.fm`). The script normalizes every
@@ -266,8 +268,10 @@ compare parsed structure rather than raw counts).
   positional) are normalized: no-scheme → prefix `https://`; whitespace trimmed; validated;
   de-duplicated.
 
-## Open questions for review
+## Resolved: default mode (2026-07-12)
 
-- Should `--from-fms` become the **default** when no positional/flags are given (i.e. running the
-  script bare prefers FMS-derived over today's `*`)? Leaning yes, but it changes the current
-  zero-arg behavior, so flagged for your call.
+- **Running the script with no positional and no flags now defaults to `--from-fms`** (was `*`).
+  This is an intentional behavior change: the bare invocation prefers the FMS-derived allowlist so
+  the CORS layer tracks the Admin Console OAuth Allow List by default. `*` and single-origin remain
+  available as explicit positional arguments. Docs and the plan's back-compat goldens account for
+  this (the zero-arg golden changes from `*` to the FMS-derived map; explicit `*`/single unchanged).
