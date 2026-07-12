@@ -39,9 +39,18 @@
 #                  For production pass your web origin, e.g. https://wim.ets.fm
 #   --conf PATH    Override the conf path (default: the FMS install path below).
 #   --dry-run      Show a unified diff of the intended change and exit; no writes.
-#   --nginx-test   After patching, best-effort `nginx -t -c <conf>` (opt-in;
-#                  needs the SSL passphrase, so it is time-limited and never
-#                  gates success).
+#   --nginx-test   After patching, run `nginx -t -c <conf>` as a syntax check.
+#                  nginx reads the SSL key passphrase from a named pipe (FIFO)
+#                  at `ssl_password_file`, so `nginx -t` BLOCKS unless a
+#                  passphrase is written to that FIFO in the background first.
+#                  Supply it via --passphrase / $FMS_SSL_PASSPHRASE and the
+#                  script feeds the FIFO for you; without a passphrase the check
+#                  is skipped and the exact manual command is printed instead.
+#   --passphrase P The SSL certificate key passphrase, used only to feed the
+#                  FIFO for --nginx-test. May also be given via the
+#                  $FMS_SSL_PASSPHRASE environment variable. This is the
+#                  passphrase for whichever cert FMS is using -- the built-in
+#                  self-signed cert if you have not installed a custom one.
 #   -h, --help     This help.
 
 set -euo pipefail
@@ -53,6 +62,7 @@ ORIGIN="*"
 CONF="$DEFAULT_CONF"
 DRY_RUN=0
 NGINX_TEST=0
+PASSPHRASE="${FMS_SSL_PASSPHRASE:-}"
 origin_set=0
 
 usage() {
@@ -69,6 +79,10 @@ while [ $# -gt 0 ]; do
 		--conf=*)   CONF="${1#*=}"; shift ;;
 		--dry-run)  DRY_RUN=1; shift ;;
 		--nginx-test) NGINX_TEST=1; shift ;;
+		--passphrase)
+			[ $# -ge 2 ] || { echo "ERROR: --passphrase needs a value" >&2; exit 2; }
+			PASSPHRASE="$2"; shift 2 ;;
+		--passphrase=*) PASSPHRASE="${1#*=}"; shift ;;
 		-h|--help)  usage; exit 0 ;;
 		--) shift; break ;;
 		-*) echo "ERROR: unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -207,26 +221,68 @@ echo "Patched $new_done CORS block(s) in: $CONF"
 echo "Access-Control-Allow-Origin set to: '$ORIGIN'"
 
 # ---- optional nginx syntax check -------------------------------------------
+# nginx reads the SSL key passphrase from `ssl_password_file`, which on FMS is a
+# named pipe (FIFO). `nginx -t` opens that file and BLOCKS until something
+# writes the passphrase to it -- so a bare `nginx -t` hangs forever. The correct
+# pattern is to background a writer that feeds the passphrase into the FIFO,
+# then run `nginx -t`. See docs/fms-server-cors-config.md.
+# Run `nginx -t`, bounded by `timeout` when that command is available (it is on
+# Linux; not on stock macOS). Never gates the patch's success.
+run_nginx_t() {
+	if command -v timeout >/dev/null 2>&1; then
+		timeout 30 nginx -t -c "$CONF"
+	else
+		nginx -t -c "$CONF"
+	fi
+}
+
 if [ "$NGINX_TEST" -eq 1 ]; then
 	echo
-	echo "Running best-effort nginx syntax check (time-limited; may need the SSL passphrase)..."
-	if command -v nginx >/dev/null 2>&1; then
-		# `nginx -t` blocks reading the passphrase FIFO if httpserver is down,
-		# so cap it; its result is informational and never gates success.
-		timeout 10 nginx -t -c "$CONF" || \
-			echo "(nginx -t did not confirm -- run it manually once httpserver is up; see next steps)"
+	if ! command -v nginx >/dev/null 2>&1; then
+		echo "(--nginx-test: nginx not on PATH; skipping. Run the check manually -- see next steps.)"
 	else
-		echo "(nginx not on PATH; skipping)"
+		# Discover the passphrase FIFO nginx will read from this conf.
+		PW_FILE=$(perl -ne 'print $1 if /^\s*ssl_password_file\s+"?([^";]+)"?\s*;/' "$CONF" | head -1)
+
+		if [ -n "$PW_FILE" ] && [ -p "$PW_FILE" ] && [ -z "$PASSPHRASE" ]; then
+			# FIFO passphrase file + no passphrase => nginx -t would block. Skip.
+			echo "(--nginx-test: the SSL passphrase file is a FIFO and no passphrase was"
+			echo " given, so nginx -t would block. Skipping. Pass --passphrase /"
+			echo " \$FMS_SSL_PASSPHRASE, or run the manual command in the next steps.)"
+		elif [ -n "$PW_FILE" ] && [ -p "$PW_FILE" ]; then
+			echo "Running nginx syntax check (feeding the SSL passphrase FIFO)..."
+			# Background a writer for the FIFO; nginx drains it as it loads the key.
+			( printf '%s\n' "$PASSPHRASE" > "$PW_FILE" ) &
+			writer_pid=$!
+			run_nginx_t || \
+				echo "(nginx -t did not confirm -- re-run manually once httpserver is up; see next steps)"
+			# If nginx never opened the FIFO, the writer is still blocked; clean up.
+			kill "$writer_pid" 2>/dev/null || true
+			wait "$writer_pid" 2>/dev/null || true
+		else
+			# Not a FIFO (plain passphrase file, or none) -- nginx -t won't block.
+			echo "Running nginx syntax check..."
+			run_nginx_t || \
+				echo "(nginx -t did not confirm -- re-run manually once httpserver is up; see next steps)"
+		fi
 	fi
 fi
 
 # ---- next steps -------------------------------------------------------------
+# Show the FIFO path this conf actually uses so the printed command is correct.
+PW_FILE=$(perl -ne 'print $1 if /^\s*ssl_password_file\s+"?([^";]+)"?\s*;/' "$CONF" | head -1)
+: "${PW_FILE:=/opt/FileMaker/FileMaker Server/CStore/.passphrase}"
+
 cat <<NEXT
 
 Done. To finish (these are NOT automated on purpose):
 
-  # 1. Verify syntax (feeds the SSL passphrase FIFO if prompted):
-  sudo nginx -t -c "$CONF"
+  # 1. Verify syntax. nginx reads the key passphrase from a FIFO, so a bare
+  #    'nginx -t' HANGS -- feed the passphrase into the FIFO in the background
+  #    first (use the passphrase for whichever cert FMS is using; the built-in
+  #    self-signed cert if no custom cert is installed):
+  ( printf '%s\n' 'YOUR_SSL_PASSPHRASE' > "$PW_FILE" ) & \\
+    sudo nginx -t -c "$CONF"
 
   # 2. Apply (needs FMS admin-console credentials):
   fmsadmin restart httpserver

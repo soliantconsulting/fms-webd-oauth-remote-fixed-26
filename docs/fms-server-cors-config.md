@@ -46,6 +46,16 @@ every line — backs up the original, is **idempotent** (re-run any time FMS reg
 on upgrade), and prints the `nginx -t` / `fmsadmin restart httpserver` commands to finish. Omit the
 origin argument to use `'*'` (fine for a demo; prefer your specific `webDNS` origin for production).
 
+To also run the syntax check, add `--nginx-test` and supply the SSL key passphrase (needed because
+nginx reads it from a FIFO — see [Check the syntax](#check-the-syntax) below):
+
+```bash
+sudo ./patch-fms-nginx-cors.sh https://<webDNS> --nginx-test --passphrase 'YOUR_SSL_PASSPHRASE'
+# (or export FMS_SSL_PASSPHRASE=... beforehand instead of --passphrase)
+```
+
+Without a passphrase the script skips the check (it will not hang) and prints the manual command.
+
 It deliberately does **not** touch the SSL certificate/key or the port-80 include (those are
 environment-specific to a custom-cert setup, not to this OAuth flow), and it does **not** set the
 Custom Home URL — section 2 below is still a manual Admin Console step.
@@ -167,12 +177,33 @@ What changed:
 ### Check the syntax
 
 FileMaker Server's nginx is separate from any system nginx, so `sudo nginx -t` alone tests
-the **wrong** config. Point `-t` at the FMS config explicitly (and feed it the SSL cert
-passphrase so the test can load the certificate):
+the **wrong** config. Point `-t` at the FMS config explicitly.
+
+You must also feed it the SSL key passphrase, and the way you do that matters. FMS's
+`ssl_password_file` is **not a regular file — it is a named pipe (FIFO)**:
+
+```bash
+ls -l "/opt/FileMaker/FileMaker Server/CStore/.passphrase"
+# prw-rw---- 1 fmserver fmsadmin 0 ... .passphrase   <-- leading 'p' = FIFO
+```
+
+`nginx -t` opens that FIFO to read the passphrase and **blocks until something writes to it**.
+So a bare `nginx -t` appears to hang forever. The fix is to write the passphrase into the FIFO
+from a **backgrounded** command (the trailing `&`) *before* nginx reads it:
 
 ```bash
 echo "your SSL cert passphrase here" > "/opt/FileMaker/FileMaker Server/CStore/.passphrase" & sudo nginx -t -c "/opt/FileMaker/FileMaker Server/NginxServer/conf/fms_nginx.conf"
 ```
+
+> **Which passphrase?** Use the passphrase for **whichever certificate FMS is currently
+> using** — i.e. the one named by `ssl_certificate` / `ssl_certificate_key` at the top of
+> `fms_nginx.conf`. If you have **not** installed a custom certificate, that is FMS's built-in
+> **self-signed** cert (`server.pem` / `privateKey.key`), and you use its passphrase. Only after
+> a custom cert is installed (`serverCustom.pem` / `serverKey.pem`) do you use the custom cert's
+> passphrase.
+
+> The [script](#automated-use-the-script) automates exactly this FIFO-feeding dance when you
+> pass `--nginx-test --passphrase '...'`.
 
 A successful test prints:
 
