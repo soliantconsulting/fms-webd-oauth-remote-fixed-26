@@ -30,6 +30,28 @@ Config file:
 /opt/FileMaker/FileMaker Server/NginxServer/conf/fms_nginx.conf
 ```
 
+### Automated: use the script
+
+If you would rather not hand-edit, run
+[`scripts/patch-fms-nginx-cors.sh`](../scripts/patch-fms-nginx-cors.sh) **on the FileMaker Server
+host**. Copy the script to the box, then:
+
+```bash
+sudo ./patch-fms-nginx-cors.sh https://<webDNS>      # e.g. https://wim.ets.fm
+# preview first with:  sudo ./patch-fms-nginx-cors.sh --dry-run https://<webDNS>
+```
+
+It applies exactly the CORS edit described below — in **both** `server` blocks, with `always` on
+every line — backs up the original, is **idempotent** (re-run any time FMS regenerates the config
+on upgrade), and prints the `nginx -t` / `fmsadmin restart httpserver` commands to finish. Omit the
+origin argument to use `'*'` (fine for a demo; prefer your specific `webDNS` origin for production).
+
+It deliberately does **not** touch the SSL certificate/key or the port-80 include (those are
+environment-specific to a custom-cert setup, not to this OAuth flow), and it does **not** set the
+Custom Home URL — section 2 below is still a manual Admin Console step.
+
+The rest of this section documents the same change by hand.
+
 ### Stop the web server first
 
 ```bash

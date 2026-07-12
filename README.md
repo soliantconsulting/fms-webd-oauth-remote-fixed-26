@@ -43,6 +43,24 @@ This demo is static HTML and JavaScript; the browser cannot read a `.env` file. 
 | `useFullPageRedirect` | Switch between popup (`false`, default) and full-page redirect (`true`). |
 | `logLevel` | loglevel verbosity: `trace` \| `debug` \| `info` \| `warn` \| `error` \| `silent`. |
 
+## Server-side setup (FileMaker Server)
+
+Because this page lives on `webDNS` and calls FileMaker Server on `fmsDNS`, the browser treats
+those calls as **cross-origin**. FileMaker Server must be configured to allow them, or the login
+never starts. Two server-side changes are needed:
+
+1. **Relax the CORS policy** in the FMS nginx config so the browser may make the
+   `oauthproviderinfo` / `getoauthurl` calls and read the `X-FMS-Request-ID` response header.
+2. **Set the Custom Home URL** (Admin Console → Connectors → Web Publishing) to `https://<webDNS>`
+   so FMS honors the OAuth return URL back to your web server.
+
+See [`docs/fms-server-cors-config.md`](docs/fms-server-cors-config.md) for the full procedure and
+the reasoning. For step 1 there is a re-runnable helper,
+[`scripts/patch-fms-nginx-cors.sh`](scripts/patch-fms-nginx-cors.sh), that you run **on the
+FileMaker Server box** (`sudo ./patch-fms-nginx-cors.sh https://<webDNS>`). It is worth keeping
+around because **FMS regenerates its nginx config on upgrade**, reverting the CORS block to stock;
+just re-run the script. Step 2 remains a manual Admin Console setting.
+
 ## Debug logging
 
 Logging uses the [loglevel](https://github.com/pimterry/loglevel) library, loaded from a CDN
