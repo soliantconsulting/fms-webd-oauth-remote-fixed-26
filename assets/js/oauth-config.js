@@ -8,7 +8,8 @@ var OAUTH_CONFIG = {
 	dbName: 'OAuth_tester',
 	/** FileMaker Server box: target of all API calls and the login form POST. */
 	fmsDNS: 'mbp2013.ets.fm',
-	/** This web server box: X-FMS-Return-URL (popup mode) + post-login homeUrl. */
+	/** This web server box: used for the X-FMS-Return-URL in popup mode. (The post-login
+	 *  home URL follows the page's live origin, so it works under any allowed host.) */
 	webDNS: 'wim.ets.fm',
 	/** Provider name passed to getOAuthURL (must match the FMS OAuth config). */
 	identityProvider: 'Microsoft',

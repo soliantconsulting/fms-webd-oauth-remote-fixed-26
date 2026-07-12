@@ -37,7 +37,7 @@ This demo is static HTML and JavaScript; the browser cannot read a `.env` file. 
 | --- | --- |
 | `dbName` | Published WebDirect file name to open after OAuth (no `.fmp12`). |
 | `fmsDNS` | FileMaker Server box. Target of all API calls and the login POST. |
-| `webDNS` | This web server box. Used for `X-FMS-Return-URL` and the home URL. |
+| `webDNS` | This web server box. Used for the `X-FMS-Return-URL` in popup mode. The post-login home URL is **not** taken from here — it follows the page's live origin (`window.location.origin`), so the same files work under any allowed host. |
 | `identityProvider` | Provider name passed to `getOAuthURL` (must match the FMS OAuth config). |
 | `autoStartOAuth` | When `true`, OAuth starts as soon as provider info loads. The Member Login button still shows for manual retry. |
 | `useFullPageRedirect` | Switch between popup (`false`, default) and full-page redirect (`true`). |
@@ -137,7 +137,7 @@ sequenceDiagram
     Note over P: oauth-landing.html writes<br/>localStorage 'oauth-response', closes popup
     P-->>I: storage event (same origin)
     I->>F: doOAuthLogin → POST /fmi/webd/{dbName}<br/>(user=requestId, pwd=identifier)
-    F-->>I: WebDirect session opens (homeurl on webDNS)
+    F-->>I: WebDirect session opens (homeurl = this page's origin)
 ```
 
 ### Full-page mode flow
@@ -161,7 +161,7 @@ sequenceDiagram
     Note over I: initOAuth → resumeOAuthAfterRedirect<br/>reads query string + sessionStorage requestId
     I->>F: doOAuthLogin → POST /fmi/webd/{dbName}<br/>(user=requestId, pwd=identifier)
     Note over I: strip query string from URL
-    F-->>I: WebDirect session opens (homeurl on webDNS)
+    F-->>I: WebDirect session opens (homeurl = this page's origin)
 ```
 
 ## Local testing with Podman
