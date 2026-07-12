@@ -37,20 +37,26 @@ If you would rather not hand-edit, run
 host**. Copy the script to the box, then:
 
 ```bash
+# Recommended: derive CORS allowlist from the FMS OAuth Allow List (default)
+sudo ./patch-fms-nginx-cors.sh --from-fms
+# preview first with:  sudo ./patch-fms-nginx-cors.sh --dry-run --from-fms
+
+# Or specify a single origin:
 sudo ./patch-fms-nginx-cors.sh https://<webDNS>      # e.g. https://wim.ets.fm
-# preview first with:  sudo ./patch-fms-nginx-cors.sh --dry-run https://<webDNS>
+
+# Or wildcard (demo only):
+sudo ./patch-fms-nginx-cors.sh '*'
 ```
 
-It applies exactly the CORS edit described below — in **both** `server` blocks, with `always` on
-every line — backs up the original, is **idempotent** (re-run any time FMS regenerates the config
-on upgrade), and prints the `nginx -t` / `fmsadmin restart httpserver` commands to finish. Omit the
-origin argument to use `'*'` (fine for a demo; prefer your specific `webDNS` origin for production).
+It applies the CORS edit described below — in **both** `server` blocks, with `always` on every
+line — backs up the original, is **idempotent** (re-run any time FMS regenerates the config on
+upgrade), and prints the `nginx -t` / `fmsadmin restart httpserver` commands to finish.
 
 To also run the syntax check, add `--nginx-test` and supply the SSL key passphrase (needed because
 nginx reads it from a FIFO — see [Check the syntax](#check-the-syntax) below):
 
 ```bash
-sudo ./patch-fms-nginx-cors.sh https://<webDNS> --nginx-test --passphrase 'YOUR_SSL_PASSPHRASE'
+sudo ./patch-fms-nginx-cors.sh --from-fms --nginx-test --passphrase 'YOUR_SSL_PASSPHRASE'
 # (or export FMS_SSL_PASSPHRASE=... beforehand instead of --passphrase)
 ```
 
@@ -59,6 +65,52 @@ Without a passphrase the script skips the check (it will not hang) and prints th
 It deliberately does **not** touch the SSL certificate/key or the port-80 include (those are
 environment-specific to a custom-cert setup, not to this OAuth flow), and it does **not** set the
 Custom Home URL — section 2 below is still a manual Admin Console step.
+
+#### Allowing multiple web origins
+
+Starting with FileMaker Server 26.1.1.15, the FMS Admin Console supports an **OAuth Allow List**
+(External Authentication → OAuth Allow List) that accepts multiple allowed domains for programmatic
+OAuth / `X-FMS-Return-URL` requests. On the box this is stored in
+`/fms/Data/Preferences/dbs_config.xml` as `OAuthDomainName` (comma-separated hostnames) and
+`OAuthAllowList` (0/1 toggle).
+
+The script's **`--from-fms`** mode (the default when no arguments given) reads this list and
+generates an nginx `map` block that echoes the request `Origin` header back only when it exactly
+matches an allowlisted value — the standard nginx idiom for multi-origin CORS. Because FMS and nginx
+now derive from the same source, they cannot silently drift; changing domains in Admin Console means
+re-running `--from-fms` to update the nginx side.
+
+**How it works:**
+
+The `Access-Control-Allow-Origin` (ACAO) header holds exactly one value, or `*` — never a space or
+comma list. To allow *several specific origins*, nginx uses a `map` that sets a variable based on
+the incoming `Origin` request header:
+
+```nginx
+map $http_origin $fms_cors_allow_origin {
+    default        "";
+    "https://wim.ets.fm"   "https://wim.ets.fm";
+    "https://site.ets.fm"  "https://site.ets.fm";
+}
+```
+
+The server blocks then reference `$fms_cors_allow_origin` instead of a static value:
+
+```nginx
+add_header 'Access-Control-Allow-Origin' $fms_cors_allow_origin always;
+```
+
+When the browser's `Origin` is `https://wim.ets.fm`, nginx echoes it back; when it's
+`https://evil.example.com`, the map's `default ""` means the ACAO header is omitted entirely, and
+the browser blocks the response — the correct deny behavior.
+
+The two layers (FMS's OAuth return-URL authorization and nginx's CORS browser gate) are enforced
+independently. If you must CORS-allow an origin FMS does not, use `--allow-origin` to union both
+sources; if you want them fully separate, skip `--from-fms` and supply origins manually. For the
+common case — one web origin or several all known to FMS — `--from-fms` keeps the layers in sync.
+
+For design details see
+[`docs/superpowers/specs/2026-07-12-cors-multi-origin-allowlist-design.md`](superpowers/specs/2026-07-12-cors-multi-origin-allowlist-design.md).
 
 The rest of this section documents the same change by hand.
 

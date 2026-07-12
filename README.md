@@ -57,9 +57,15 @@ never starts. Two server-side changes are needed:
 See [`docs/fms-server-cors-config.md`](docs/fms-server-cors-config.md) for the full procedure and
 the reasoning. For step 1 there is a re-runnable helper,
 [`scripts/patch-fms-nginx-cors.sh`](scripts/patch-fms-nginx-cors.sh), that you run **on the
-FileMaker Server box** (`sudo ./patch-fms-nginx-cors.sh https://<webDNS>`). It is worth keeping
-around because **FMS regenerates its nginx config on upgrade**, reverting the CORS block to stock;
-just re-run the script. Step 2 remains a manual Admin Console setting.
+FileMaker Server box**. It is worth keeping around because **FMS regenerates its nginx config on
+upgrade**, reverting the CORS block to stock; just re-run the script. Step 2 remains a manual Admin
+Console setting.
+
+**Recommended:** run the script with `--from-fms` (the default) to derive the CORS allowlist from
+the FMS OAuth Allow List (`sudo ./patch-fms-nginx-cors.sh --from-fms`), so the two layers stay in
+sync. For one web origin use `sudo ./patch-fms-nginx-cors.sh https://<webDNS>`. For multiple web
+origins against one FileMaker Server, configure the OAuth Allow List in Admin Console → External
+Authentication, then run `--from-fms`.
 
 ## Debug logging
 
