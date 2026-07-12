@@ -9,7 +9,7 @@ var OAUTH_CONFIG = {
 	/** FileMaker Server box: target of all API calls and the login form POST. */
 	fmsDNS: 'mbp2013.ets.fm',
 	/** This web server box: X-FMS-Return-URL (popup mode) + post-login homeUrl. */
-	webDNS: 'webdlogin.ets.fm',
+	webDNS: 'wim.ets.fm',
 	/** Provider name passed to getOAuthURL (must match the FMS OAuth config). */
 	identityProvider: 'Microsoft',
 	/** Start OAuth as soon as provider info loads (button remains for manual retry). */

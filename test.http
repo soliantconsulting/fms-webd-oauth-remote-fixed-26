@@ -1,0 +1,68 @@
+# =============================================================================
+# getoauthurl test requests for mbp2013.ets.fm
+#
+# WHY THE DEFAULT REQUEST FAILS ("connect EHOSTUNREACH 192.168.2.82:443"):
+#   The name mbp2013.ets.fm resolves to a MIXED address list:
+#     - 192.168.2.82  (IPv4)  <- from your /etc/hosts entry
+#     - 2600:1f16:... (IPv6)  <- from DNS: the public ngrok tunnel edge
+#   /etc/hosts only supplies the IPv4, so macOS still queries DNS for the
+#   IPv6 (AAAA) half and hands the app BOTH. This box has NO IPv6 route, so
+#   the ngrok IPv6 addresses are unreachable. curl / Insomnia / the VS Code
+#   REST Client (all Node/Electron dual-stack) attempt those dead IPv6 legs
+#   and fall over; the browser quietly uses the reachable IPv4 and works.
+#
+#   Fix: force a single, reachable path (pick a variant below).
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# 1) ORIGINAL (default resolution) — fails intermittently for the reason above.
+# -----------------------------------------------------------------------------
+curl --request GET \
+  --url 'https://mbp2013.ets.fm/fmi/webd/oauthapi/getoauthurl?trackingID=7edc0966-fa64-03f8-e439-77e4d6a4fed8&provider=Microsoft&address=mbp2013.ets.fm&X-FMS-OAuth-AuthType=2' \
+  --header 'x-fms-application-type: 8' \
+  --header 'x-fms-application-version: 17' \
+  --header 'x-fms-return-url: https://wim.ets.fm/index.html'
+
+
+# -----------------------------------------------------------------------------
+# 2) IPv4 / LAN — THE RELIABLE FIX from this box. Forces IPv4, which pins to
+#    the /etc/hosts entry 192.168.2.82 (the FMS box on your LAN). No IPv6, no
+#    ngrok, no EHOSTUNREACH. Use this when you're on the 192.168.2.x network.
+# -----------------------------------------------------------------------------
+curl -4 --request GET \
+  --url 'https://mbp2013.ets.fm/fmi/webd/oauthapi/getoauthurl?trackingID=7edc0966-fa64-03f8-e439-77e4d6a4fed8&provider=Microsoft&address=mbp2013.ets.fm&X-FMS-OAuth-AuthType=2' \
+  --header 'x-fms-application-type: 8' \
+  --header 'x-fms-application-version: 17' \
+  --header 'x-fms-return-url: https://wim.ets.fm/index.html'
+
+
+# -----------------------------------------------------------------------------
+# 3) IPv6 variant — forces the IPv6 stack. On a host WITH real IPv6 this hits
+#    the public ngrok edge. NOTE: this box has no IPv6 route, so curl instead
+#    connects to ::ffff:192.168.2.82 (the hosts IPv4, v6-mapped) — still 200,
+#    but it is NOT actually testing the ngrok path. Run from an IPv6-capable
+#    network to exercise ngrok over IPv6.
+# -----------------------------------------------------------------------------
+curl -6 --request GET \
+  --url 'https://mbp2013.ets.fm/fmi/webd/oauthapi/getoauthurl?trackingID=7edc0966-fa64-03f8-e439-77e4d6a4fed8&provider=Microsoft&address=mbp2013.ets.fm&X-FMS-OAuth-AuthType=2' \
+  --header 'x-fms-application-type: 8' \
+  --header 'x-fms-application-version: 17' \
+  --header 'x-fms-return-url: https://wim.ets.fm/index.html'
+
+
+# -----------------------------------------------------------------------------
+# 4) ngrok variant — routes through the PUBLIC ngrok tunnel edge (works from
+#    anywhere, LAN or not). --connect-to re-resolves ngrok's own hostname each
+#    run (rotation-proof, and it has IPv4 so this box can reach it) while
+#    keeping SNI + Host = mbp2013.ets.fm so FMS/ngrok route correctly.
+#    -4 keeps it on IPv4 since this box has no IPv6.
+#    If ngrok is restarted the CNAME below changes — refresh it with:
+#      host mbp2013.ets.fm     (look for the *.ngrok-cname.com alias)
+# -----------------------------------------------------------------------------
+curl -4 --request GET \
+  --connect-to 'mbp2013.ets.fm:443:d8yr8gyls8brshsp.4h2oti9fxkkrcbjpg.ngrok-cname.com:443' \
+  --url 'https://mbp2013.ets.fm/fmi/webd/oauthapi/getoauthurl?trackingID=7edc0966-fa64-03f8-e439-77e4d6a4fed8&provider=Microsoft&address=mbp2013.ets.fm&X-FMS-OAuth-AuthType=2' \
+  --header 'x-fms-application-type: 8' \
+  --header 'x-fms-application-version: 17' \
+  --header 'x-fms-return-url: https://wim.ets.fm/index.html'
