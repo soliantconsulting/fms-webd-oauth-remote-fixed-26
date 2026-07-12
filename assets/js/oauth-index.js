@@ -1,7 +1,7 @@
 /**
  * Page glue for index.html: set logging, resume a full-page redirect if we are
  * returning from the IdP, otherwise render the Member Login button. Completes the
- * login by POSTing to FileMaker Server (fmsDNS) and sending the user home on webDNS.
+ * login by POSTing to FileMaker Server (fmsDNS) and sending the user home on this page's origin.
  */
 
 var OAUTH_ERROR_MESSAGES = {
@@ -116,7 +116,9 @@ function completeIndexOAuth(result) {
 		OAUTH_CONFIG.dbName,
 		result.requestId,
 		result.identifier,
-		'https://' + OAUTH_CONFIG.webDNS + '/index.html',
+		// Home URL follows the origin this page is actually served from, so the same
+		// files work under any allowed webDNS host (must be on the FMS OAuth Allow List).
+		window.location.origin + '/index.html',
 		result.error,
 		OAUTH_CONFIG.fmsDNS
 	);
